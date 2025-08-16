@@ -11,6 +11,6 @@ Requirements:
 
 1. Go to spotify developers dashboard
 2. Create an app and select "Web API" as a service you'll use
-3. Copy paste the client ID and Client secret in the `secrets.json` file
+3. Copy paste the client ID and Client secret in a file under: `HOME/.custom_scripts/spotify/.client_credentials.json`
 
 You're good to go! Enjoy!
