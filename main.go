@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -46,43 +48,77 @@ type CurrentlyPlaying struct {
 	IsPlaying bool `json:"is_playing"`
 }
 
-func main() {
-	// Step 1: Get or refresh token
-	token, err := getOrRefreshToken()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting token: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Step 2: Get current track ID
-	trackID, err := getCurrentTrackID(token.AccessToken)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting current track: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Step 3: Save (like) the track
-	if err := saveTrack(token.AccessToken, trackID); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving track: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// getAuthCode prompts the user to get an authorization code
+// getAuthCode automates the authorization process by starting a local server and opening the browser
 func getAuthCode() (string, error) {
+	codeChan := make(chan string)
+	errChan := make(chan error)
+
+	// Start local HTTP server
+	server := &http.Server{Addr: ":3000"}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		code := query.Get("code")
+		if code == "" {
+			errChan <- fmt.Errorf("no code found in redirect URL")
+			return
+		}
+		codeChan <- code
+		fmt.Fprintf(w, "<h1>Authorization successful! You can close this tab.</h1>")
+	})
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- fmt.Errorf("server error: %v", err)
+		}
+	}()
+
+	// Open authorization URL in default browser
 	authURL := fmt.Sprintf(
 		"https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=%s",
 		url.QueryEscape(clientID), url.QueryEscape(redirectURI), url.QueryEscape(scopes),
 	)
-	fmt.Printf("Open this URL in your browser to authorize:\n%s\n", authURL)
-	fmt.Println("After authorizing, copy the 'code' parameter from the redirect URL.")
-	fmt.Print("Enter the authorization code: ")
-	var code string
-	fmt.Scanln(&code)
-	if code == "" {
-		return "", fmt.Errorf("no authorization code provided")
+	if err := openBrowser(authURL); err != nil {
+		return "", fmt.Errorf("failed to open browser: %v", err)
 	}
-	return code, nil
+
+	// Wait for code or error
+	select {
+	case code := <-codeChan:
+		if err := server.Close(); err != nil {
+			fmt.Printf("Warning: failed to close server: %v\n", err)
+		}
+		return code, nil
+	case err := <-errChan:
+		if closeErr := server.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close server: %v\n", closeErr)
+		}
+		return "", err
+	case <-time.After(5 * time.Minute): // Timeout after 5 minutes
+		server.Close()
+		return "", fmt.Errorf("authorization timeout")
+	}
+}
+
+// openBrowser opens the URL in the default browser based on OS
+func openBrowser(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler", url}
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	case "linux":
+		cmd = "xdg-open"
+		args = []string{url}
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return exec.Command(cmd, args...).Start()
 }
 
 // getInitialTokens requests initial access and refresh tokens
@@ -334,4 +370,28 @@ func saveTrack(accessToken, trackID string) error {
 
 	fmt.Println("Successfully liked the track!")
 	return nil
+}
+
+func main() {
+	fmt.Println("Starting Spotify Like Track program...")
+
+	// Step 1: Get or refresh token
+	token, err := getOrRefreshToken()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting token: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Step 2: Get current track ID
+	trackID, err := getCurrentTrackID(token.AccessToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current track: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Step 3: Save (like) the track
+	if err := saveTrack(token.AccessToken, trackID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving track: %v\n", err)
+		os.Exit(1)
+	}
 }
