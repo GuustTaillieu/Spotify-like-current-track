@@ -47,8 +47,6 @@ type CurrentlyPlaying struct {
 }
 
 func main() {
-	fmt.Println("Starting Spotify Like Track program...")
-
 	// Step 1: Get or refresh token
 	token, err := getOrRefreshToken()
 	if err != nil {
