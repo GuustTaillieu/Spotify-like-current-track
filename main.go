@@ -17,12 +17,16 @@ import (
 
 // Spotify API credentials (replace with your own)
 const (
-	clientID     = "5d1d59669ef940fa9dc772d93ff64609"
-	clientSecret = "838e21b6a3084acab7bc4a5175e589c2"
-	redirectURI  = "http://127.0.0.1:3000"
-	scopes       = "user-read-currently-playing user-library-modify"
-	tokenFile    = ".custom_scripts/spotify/.spotify_tokens.json"
+	clientFile  = ".custom_scripts/spotify/.client_credentials.json"
+	redirectURI = "http://127.0.0.1:3000"
+	scopes      = "user-read-currently-playing user-library-modify"
+	tokenFile   = ".custom_scripts/spotify/.spotify_tokens.json"
 )
+
+type ClientCredentials struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+}
 
 // Token represents the structure for Spotify API tokens
 type Token struct {
@@ -46,6 +50,30 @@ type CurrentlyPlaying struct {
 		URI string `json:"uri"`
 	} `json:"item"`
 	IsPlaying bool `json:"is_playing"`
+}
+
+func getClientSecrets() (ClientCredentials, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ClientCredentials{}, fmt.Errorf("failed to get home directory: %v", err)
+	}
+	credentialsFile := filepath.Join(homeDir, clientFile)
+	file, err := os.Open(credentialsFile)
+	if err != nil {
+		return ClientCredentials{}, fmt.Errorf("failed to open credentials file: %v", err)
+	}
+	defer file.Close()
+
+	var credentials ClientCredentials
+	body, err := io.ReadAll(file)
+	if err != nil {
+		return ClientCredentials{}, fmt.Errorf("failed to read from file: %v", err)
+	}
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		return ClientCredentials{}, fmt.Errorf("failed to parse credentials: %v", err)
+	}
+
+	return credentials, nil
 }
 
 // getAuthCode automates the authorization process by starting a local server and opening the browser
@@ -72,10 +100,14 @@ func getAuthCode() (string, error) {
 		}
 	}()
 
+	creds, err := getClientSecrets()
+	if err != nil {
+		return "", fmt.Errorf("Could not retrieve credentials: %v", err)
+	}
 	// Open authorization URL in default browser
 	authURL := fmt.Sprintf(
 		"https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=%s",
-		url.QueryEscape(clientID), url.QueryEscape(redirectURI), url.QueryEscape(scopes),
+		url.QueryEscape(creds.ClientID), url.QueryEscape(redirectURI), url.QueryEscape(scopes),
 	)
 	if err := openBrowser(authURL); err != nil {
 		return "", fmt.Errorf("failed to open browser: %v", err)
@@ -123,12 +155,17 @@ func openBrowser(url string) error {
 
 // getInitialTokens requests initial access and refresh tokens
 func getInitialTokens(code string) (*Token, error) {
+	creds, err := getClientSecrets()
+	if err != nil {
+		return nil, fmt.Errorf("Could not retrieve credentials: %v", err)
+	}
+
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
-	data.Set("client_id", clientID)
-	data.Set("client_secret", clientSecret)
+	data.Set("client_id", creds.ClientID)
+	data.Set("client_secret", creds.ClientSecret)
 
 	req, err := http.NewRequest("POST", "https://accounts.spotify.com/api/token", bytes.NewBufferString(data.Encode()))
 	if err != nil {
@@ -181,8 +218,13 @@ func refreshTokens(refreshToken string) (*Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh token request: %v", err)
 	}
+
+	creds, err := getClientSecrets()
+	if err != nil {
+		return nil, fmt.Errorf("Could not retrieve credentials: %v", err)
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(clientID+":"+clientSecret)))
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(creds.ClientID+":"+creds.ClientSecret)))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
