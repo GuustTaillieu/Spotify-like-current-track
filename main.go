@@ -91,7 +91,16 @@ func getAuthCode() (string, error) {
 			return
 		}
 		codeChan <- code
-		fmt.Fprintf(w, "<h1>Authorization successful! You can close this tab.</h1>")
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `
+			<!DOCTYPE html>
+			<html>
+			<body>
+				<p>Authorization successful! This tab will close automatically.</p>
+				<script>window.close();</script>
+			</body>
+			</html>
+		`)
 	})
 
 	go func() {
