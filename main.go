@@ -3,51 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/GuustTaillieu/Spotify-utilities/auth"
-	"github.com/GuustTaillieu/Spotify-utilities/track"
+	"github.com/GuustTaillieu/Spotify-utilities/cli"
 )
-
-type CliFunction func(*auth.Token) error
-
-var cliFunctions = map[string]CliFunction{
-	"like_current_track": func(token *auth.Token) error {
-		err := track.LikeCurrentTrack(token)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Liked current track!")
-		return nil
-	},
-	"get_current_track": func(token *auth.Token) error {
-		track, err := track.GetCurrentTrack(token)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("The current track is playing: \"%s\"\n", track.Name)
-		return nil
-	},
-	"is_current_track_liked": func(token *auth.Token) error {
-		isLiked, err := track.IsCurrentTrackLiked(token)
-		if err != nil {
-			return err
-		}
-		if !isLiked {
-			return fmt.Errorf("Could not like song")
-		}
-		fmt.Printf("Liked song!")
-		return nil
-	},
-}
-
-func GetAvailableCommands() string {
-	ac := make([]string, 0, len(cliFunctions))
-	for c := range cliFunctions {
-		ac = append(ac, c)
-	}
-	return strings.Join(ac, "\n ")
-}
 
 func main() {
 	token, err := auth.GetOrRefreshToken()
@@ -58,14 +17,14 @@ func main() {
 
 	args := os.Args[1:]
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "No command given, try one of the following:\n %s\n", GetAvailableCommands())
+		fmt.Fprintf(os.Stderr, "No command given, try one of the following:\n %s\n", cli.GetAvailableCommands())
 		os.Exit(1)
 	}
 	command := args[0]
 
-	cliFunc, ok := cliFunctions[command]
+	cliFunc, ok := cli.CliFunctions[command]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "Command not found: \"%v\".\nTry one of the following:\n %s\n", command, GetAvailableCommands())
+		fmt.Fprintf(os.Stderr, "Command not found: \"%v\".\nTry one of the following:\n %s\n", command, cli.GetAvailableCommands())
 		os.Exit(1)
 	}
 	err = cliFunc(token)
