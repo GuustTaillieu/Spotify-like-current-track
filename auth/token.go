@@ -19,7 +19,7 @@ import (
 const (
 	clientFile  = ".custom_scripts/spotify/.client_credentials.json"
 	redirectURI = "http://127.0.0.1:3000"
-	scopes      = "user-read-currently-playing user-library-modify"
+	scopes      = "user-read-currently-playing user-library-modify user-library-read"
 	tokenFile   = ".custom_scripts/spotify/.spotify_tokens.json"
 )
 

@@ -12,13 +12,31 @@ import (
 type CliFunction func(*auth.Token) error
 
 var cliFunctions = map[string]CliFunction{
-	"like_current_track": track.LikeCurrentTrack,
+	"like_current_track": func(token *auth.Token) error {
+		err := track.LikeCurrentTrack(token)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Liked current track!")
+		return nil
+	},
 	"get_current_track": func(token *auth.Token) error {
 		track, err := track.GetCurrentTrack(token)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("The current track is playing: \"%s\"\n", track.Name)
+		return nil
+	},
+	"is_current_track_liked": func(token *auth.Token) error {
+		isLiked, err := track.IsCurrentTrackLiked(token)
+		if err != nil {
+			return err
+		}
+		if !isLiked {
+			return fmt.Errorf("Could not like song")
+		}
+		fmt.Printf("Liked song!")
 		return nil
 	},
 }
@@ -40,19 +58,21 @@ func main() {
 
 	args := os.Args[1:]
 	if len(args) < 1 {
-		fmt.Printf("No command given, try one of the following:\n %s\n", GetAvailableCommands())
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "No command given, try one of the following:\n %s\n", GetAvailableCommands())
+		os.Exit(1)
 	}
 	command := args[0]
 
 	cliFunc, ok := cliFunctions[command]
 	if !ok {
-		fmt.Printf("Command not found: \"%v\".\nTry one of the following:\n %s\n", command, GetAvailableCommands())
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "Command not found: \"%v\".\nTry one of the following:\n %s\n", command, GetAvailableCommands())
+		os.Exit(1)
 	}
 	err = cliFunc(token)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Something went wrong: %v", command)
+		fmt.Fprintf(os.Stderr, "Something went wrong: %v", err)
 		os.Exit(1)
 	}
+
+	os.Exit(0)
 }
