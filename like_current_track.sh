@@ -17,6 +17,6 @@ if [ ! -e $SCRIPT_EXE ]; then
 fi
 
 $SCRIPT_EXE like_current_track
-notify-send "$( $SCRIPT_EXE is_current_track_liked)"
+notify-send "$( $SCRIPT_EXE is_current_track_liked)" -a Spotify -i /usr/share/icons/hicolor/48x48/apps/spotify-launcher.png
 
 popd
